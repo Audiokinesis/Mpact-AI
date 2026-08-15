@@ -11,7 +11,7 @@ argon2-cffi-bindings==25.1.0
 arrow==1.4.0
 asttokens==3.0.2
 async-lru==2.3.0
-async-timeout==5.0.1
+async-timeout==4.0.3
 attrs==26.1.0
 babel==2.18.0
 beautifulsoup4==4.15.0
@@ -32,6 +32,7 @@ databricks-sdk==0.127.0
 debugpy==1.8.21
 decorator==5.3.1
 defusedxml==0.7.1
+distro==1.9.0
 docker==7.2.0
 exceptiongroup==1.3.1
 executing==2.2.1
@@ -39,6 +40,7 @@ faiss-cpu==1.15.0
 fastapi==0.141.1
 fastjsonschema==2.22.1
 filelock==3.32.2
+filetype==1.2.0
 Flask==3.1.3
 flask-cors==6.0.5
 fonttools==4.63.0
@@ -48,6 +50,7 @@ fsspec==2026.7.0
 gitdb==4.0.12
 GitPython==3.1.59
 google-auth==2.56.3
+google-genai==2.18.1
 graphene==3.4.3
 graphql-core==3.2.11
 graphql-relay==3.2.0
@@ -57,6 +60,7 @@ hf-xet==1.6.0
 httpcore==1.0.9
 httptools==0.8.0
 httpx==0.28.1
+httpx-sse==0.4.3
 huey==3.3.4
 huggingface_hub==1.27.0
 idna==3.18
@@ -70,6 +74,7 @@ jedi==0.20.0
 Jinja2==3.1.6
 joblib==1.5.3
 json5==0.15.0
+jsonpatch==1.33
 jsonpointer==3.1.1
 jsonschema==4.26.0
 jsonschema-specifications==2025.9.1
@@ -87,6 +92,20 @@ jupyterlab_pygments==0.3.0
 jupyterlab_server==2.28.0
 jupyterlab_widgets==3.0.16
 kiwisolver==1.5.0
+langchain==1.3.15
+langchain-classic==1.0.8
+langchain-community==0.4.2
+langchain-core==1.5.4
+langchain-google-genai==4.3.3
+langchain-huggingface==1.2.2
+langchain-ollama==1.1.0
+langchain-protocol==0.0.18
+langchain-text-splitters==1.1.2
+langgraph==1.2.11
+langgraph-checkpoint==4.2.0
+langgraph-prebuilt==1.1.0
+langgraph-sdk==0.4.2
+langsmith==0.10.18
 lark==1.3.1
 Mako==1.4.1
 markdown-it-py==4.2.0
@@ -109,10 +128,13 @@ networkx==3.4.2
 notebook==7.6.2
 notebook_shim==0.2.4
 numpy==2.2.6
+ollama==0.6.2
 opentelemetry-api==1.44.0
 opentelemetry-proto==1.44.0
 opentelemetry-sdk==1.44.0
 opentelemetry-semantic-conventions==0.65b0
+orjson==3.11.9
+ormsgpack==1.12.2
 overrides==7.7.0
 packaging==26.3
 pandas==2.3.3
@@ -132,6 +154,7 @@ pyasn1==0.6.4
 pyasn1_modules==0.4.2
 pycparser==3.0
 pydantic==2.13.4
+pydantic-settings==2.15.0
 pydantic_core==2.46.4
 pydeck==0.9.3
 Pygments==2.20.0
@@ -148,7 +171,9 @@ PyYAML==6.0.3
 pyzmq==27.1.0
 referencing==0.37.0
 regex==2026.7.19
+reportlab==5.0.0
 requests==2.34.2
+requests-toolbelt==1.0.0
 rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
 rfc3987-syntax==1.1.0
@@ -164,6 +189,7 @@ shellingham==1.5.4
 six==1.17.0
 skops==0.14.0
 smmap==5.0.3
+sniffio==1.3.1
 soupsieve==2.9.2
 SQLAlchemy==2.0.52
 sqlparse==0.5.5
@@ -189,6 +215,7 @@ typing_extensions==4.16.0
 tzdata==2026.3
 uri-template==1.3.0
 urllib3==2.7.0
+uuid_utils==0.17.0
 uvicorn==0.52.1
 waitress==3.0.2
 watchdog==6.0.0
@@ -196,9 +223,11 @@ wcwidth==0.8.2
 webcolors==25.10.0
 webencodings==0.5.1
 websocket-client==1.9.0
-websockets==16.1.1
+websockets==15.0.1
 Werkzeug==3.1.8
 widgetsnbextension==4.0.15
 xgboost==3.2.0
+xxhash==4.0.0
 yarl==1.24.5
 zipp==4.1.0
+zstandard==0.25.0

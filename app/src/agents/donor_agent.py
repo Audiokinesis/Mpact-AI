@@ -3,12 +3,14 @@ import sys
 import pathlib
 import joblib
 import pandas as pd
-from xgboost import XGBClassifier
+
 from langchain_core.tools import tool
 from langchain_ollama import ChatOllama
 from langgraph.prebuilt import create_react_agent
 
-# Ensure project root path resolution
+# ----------------------------------------------------------------------
+# 1. Project Root Path Resolution
+# ----------------------------------------------------------------------
 ROOT_DIR = pathlib.Path(__file__).resolve().parent.parent
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
@@ -16,7 +18,7 @@ if str(ROOT_DIR) not in sys.path:
 from rag.retriever import RAGRetriever
 
 # ----------------------------------------------------------------------
-# 1. Load ML Model & Feature Preprocessing
+# 2. Pipeline Class Definition & Model Loading
 # ----------------------------------------------------------------------
 
 FEATURE_COLS = [
@@ -33,107 +35,132 @@ FEATURE_COLS = [
     "monetary_velocity_365d",
 ]
 
-# Option A: Load from native XGBoost JSON file
-xgb_model = XGBClassifier()
-xgb_model.load_model("best_donor_model_xgb.json")
+# Definition included to ensure smooth unpickling from joblib
+class DonorInferencePipeline:
+    def __init__(self, model, feature_cols):
+        self.model = model
+        self.feature_cols = feature_cols
+
+    def preprocess(self, raw_df: pd.DataFrame) -> pd.DataFrame:
+        df_proc = raw_df.copy()
+        if "avg_days_between_donations" in df_proc.columns:
+            df_proc["avg_days_between_donations"] = df_proc["avg_days_between_donations"].fillna(-1)
+        df_proc = df_proc.fillna(0)
+        return df_proc[self.feature_cols]
+
+    def predict_proba(self, raw_df: pd.DataFrame):
+        X_proc = self.preprocess(raw_df)
+        return self.model.predict_proba(X_proc)[:, 1]
 
 
-def preprocess_and_predict(raw_data: dict) -> float:
-    """Preprocesses a single donor feature dictionary and returns predicted probability."""
-    df = pd.DataFrame([raw_data])
-    if "avg_days_between_donations" in df.columns:
-        df["avg_days_between_donations"] = df["avg_days_between_donations"].fillna(-1)
-    df = df.fillna(0)
-    X = df[FEATURE_COLS]
-    prob = xgb_model.predict_proba(X)[0][1]
-    return float(prob)
+MODEL_PATH = r"C:\Users\mdesc\Documents\Projects\MpactAI\app\src\models\best_donor_model_xgb.pkl"
+CSV_PATH = r"C:\Users\mdesc\Documents\Projects\MpactAI\app\data\raw\donor_features_v2.csv"
+
+_pipeline_instance = None
+_csv_data_instance = None
 
 
-# Simulated donor feature database for testing
-MOCK_DONOR_DATABASE = {
-    "1045": {
-        "donation_count": 8,
-        "total_donations": 1850.0,
-        "average_donation": 231.25,
-        "campaign_count": 3,
-        "days_since_first_donation": 420,
-        "donor_tenure_days": 420,
-        "avg_days_between_donations": 35.0,
-        "donations_last_365_days": 4,
-        "revenue_last_365_days": 950.0,
-        "frequency_velocity_365d": 1.2,
-        "monetary_velocity_365d": 1.15
-    },
-    "2088": {
-        "donation_count": 2,
-        "total_donations": 100.0,
-        "average_donation": 50.0,
-        "campaign_count": 1,
-        "days_since_first_donation": 650,
-        "donor_tenure_days": 650,
-        "avg_days_between_donations": 300.0,
-        "donations_last_365_days": 0,
-        "revenue_last_365_days": 0.0,
-        "frequency_velocity_365d": 0.0,
-        "monetary_velocity_365d": 0.0
-    }
-}
+def get_model_pipeline():
+    global _pipeline_instance
+    if _pipeline_instance is None:
+        if not os.path.exists(MODEL_PATH):
+            raise FileNotFoundError(f"Model file '{MODEL_PATH}' not found. Run training script first.")
+        _pipeline_instance = joblib.load(MODEL_PATH)
+    return _pipeline_instance
+
+
+def get_donor_dataframe():
+    global _csv_data_instance
+    if _csv_data_instance is None:
+        if not os.path.exists(CSV_PATH):
+            raise FileNotFoundError(f"Data file '{CSV_PATH}' not found.")
+        _csv_data_instance = pd.read_csv(CSV_PATH)
+    return _csv_data_instance
 
 
 # ----------------------------------------------------------------------
-# 2. Define Agent Tools
+# 3. Agent Tools
 # ----------------------------------------------------------------------
 
 @tool
 def get_donor_prediction(donor_id: str) -> str:
-    """Queries the trained XGBoost ML model to compute donation activation probability and feature metrics for a donor ID."""
-    donor_data = MOCK_DONOR_DATABASE.get(donor_id)
-    if not donor_data:
-        return f"Error: Donor ID #{donor_id} was not found in the database."
+    """Queries donor_features_v2.csv by donor ID and executes the trained XGBoost ML model to compute donation likelihood."""
+    try:
+        df_donors = get_donor_dataframe()
+        pipeline = get_model_pipeline()
+    except Exception as e:
+        return f"System Error initializing prediction resources: {str(e)}"
 
-    probability = preprocess_and_predict(donor_data)
+    # Check for matching donor row
+    matching_rows = pd.DataFrame()
+    if "donor_id" in df_donors.columns:
+        matching_rows = df_donors[df_donors["donor_id"].astype(str) == str(donor_id)]
+    else:
+        # Fallback to integer index if 'donor_id' column is missing
+        try:
+            idx = int(donor_id)
+            if 0 <= idx < len(df_donors):
+                matching_rows = df_donors.iloc[[idx]]
+        except ValueError:
+            pass
+
+    if matching_rows.empty:
+        return f"Error: Donor ID #{donor_id} was not found in {CSV_PATH}."
+
+    donor_row = matching_rows.iloc[[0]]
+
+    # Run prediction via loaded .pkl pipeline
+    probability = float(pipeline.predict_proba(donor_row)[0])
+
+    # Extract key feature metrics safely for LLM context
+    rev = donor_row["revenue_last_365_days"].values[0] if "revenue_last_365_days" in donor_row.columns else 0.0
+    donations = donor_row["donations_last_365_days"].values[0] if "donations_last_365_days" in donor_row.columns else 0
+    cadence = donor_row["avg_days_between_donations"].values[0] if "avg_days_between_donations" in donor_row.columns else 0.0
 
     return f"""
     DONOR PREDICTION RESULTS:
     - Donor ID: #{donor_id}
-    - Donation Likelihood (90-day window): {probability:.1%} (Probability score: {probability:.4f})
+    - Likelihood of Donation (90-day window): {probability:.1%} (Score: {probability:.4f})
     
-    KEY FEATURE HIGHLIGHTS:
-    - Total 365-day Revenue: ${donor_data['revenue_last_365_days']:,.2f}
-    - Recent 365-day Donations: {donor_data['donations_last_365_days']}
-    - Donation Cadence: Every {donor_data['avg_days_between_donations']} days
-    - Monetary Velocity Score: {donor_data['monetary_velocity_365d']}x
+    KEY CSV METRICS:
+    - 365-day Total Revenue: ${rev:,.2f}
+    - 365-day Donation Count: {donations}
+    - Avg Days Between Gifts: {cadence} days
     """
 
 
 @tool
 def search_knowledge_base(query: str) -> str:
-    """Searches organizational documents for outreach guidelines or program details."""
+    """Searches organizational document knowledge base for outreach guidelines or program context."""
     retriever = RAGRetriever()
     results = retriever.get_context_for_llm(query, top_k=2)
     return results["raw_context"]
 
 
 # ----------------------------------------------------------------------
-# 3. Define System Prompt & Agent
+# 4. System Prompt & Agent Class
 # ----------------------------------------------------------------------
 
 SYSTEM_PROMPT = """You are an AI Donor Engagement Specialist for Future Horizons Youth Foundation.
 
-You connect machine learning predictive scores with strategic fundraising recommendations.
+Your objective is to combine ML predictive scores with strategic fundraising action plans.
 
-YOUR WORKFLOW:
-1. When asked about a donor, always call `get_donor_prediction(donor_id)` first.
-2. Analyze the probability score and feature highlights returned by the ML model.
-3. Formulate a recommended action using these engagement guidelines:
-   - High Likelihood (≥ 75%): Highly personalized 1-on-1 outreach or major gift stewardship.
-   - Moderate Likelihood (40% - 74%): Standard engagement, quarterly updates, or mid-tier campaign invites.
-   - Low Likelihood (< 40%): Automated re-engagement campaign or general newsletter touchpoints.
-4. Output a clear, structured recommendation detailing:
+WORKFLOW:
+1. ALWAYS call `get_donor_prediction(donor_id)` first when asked about a specific donor.
+2. Evaluate the probability score alongside the CSV feature metrics.
+3. Formulate a recommendation using these thresholds:
+   - High Likelihood (≥ 75%): Personal 1-on-1 outreach or major gift stewardship.
+   - Moderate Likelihood (40% - 74%): Targeted campaign updates, quarterly touchpoints.
+   - Low Likelihood (< 40%): Automated re-engagement or general newsletter list.
+4. Output a clear summary containing:
    - Donor ID
    - Likelihood of donation (%)
    - Recommended action
-   - Key drivers/reasons behind the score.
+   - Core reasoning/drivers based on model results.
+5. Formulate an email to send to the donor.
+   - Include a subject line, greeting, body, and closing.
+   - Ensure the email is concise, personalized, and aligned with the recommended action.
+   - Always cite the source of your information (CSV metrics and ML model) in your reasoning.
 """
 
 
@@ -153,14 +180,15 @@ class DonorAgent:
 
 
 # ----------------------------------------------------------------------
-# 4. Execution Demo
+# 5. Execution Test
 # ----------------------------------------------------------------------
 
 if __name__ == "__main__":
-    print("\n🤖 Initializing ML-Powered Donor AI Agent...")
+    print("\n🤖 Initializing Dynamic ML-Powered Donor Agent...")
     agent = DonorAgent(model_name="llama3.2")
 
-    user_query = "Assess donor #1045 and recommend an action based on their prediction score."
+    # Change ID '0' or '1045' to match a valid row/ID in your CSV file
+    user_query = "How much has donor #DNR-06256 donated in total"
 
     print("\n" + "=" * 70)
     print(f"📩 USER REQUEST: {user_query}")
